@@ -1,0 +1,92 @@
+name: Publish GeoDatabse mmdb/csv/json
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 20 * * *'
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare
+        run: |
+          mkdir -p download
+          echo "TAG_NAME=$(date +"%Y.%m.%d")" >> $GITHUB_ENV
+
+      # Free IP to ASN
+      # Free IP to Country
+      # Free IP to Country + IP to ASN
+      - name: Download GeoDatabse mmdb
+        run: |
+          curl --connect-timeout 5 --retry 5 --retry-delay 5 --retry-max-time 25 -sLo asn.mmdb "https://ipinfo.io/data/free/asn.mmdb?token=${{ secrets.IPINFO_ACCESS_TOKEN }}"
+          curl --connect-timeout 5 --retry 5 --retry-delay 5 --retry-max-time 25 -sLo country.mmdb "https://ipinfo.io/data/free/country.mmdb?token=${{ secrets.IPINFO_ACCESS_TOKEN }}"
+          curl --connect-timeout 5 --retry 5 --retry-delay 5 --retry-max-time 25 -sLo country_asn.mmdb "https://ipinfo.io/data/free/country_asn.mmdb?token=${{ secrets.IPINFO_ACCESS_TOKEN }}"
+          cp -v *.mmdb download
+        
+      - name: Download GeoDatabse csv
+        run: |
+          curl --connect-timeout 5 --retry 5 --retry-delay 5 --retry-max-time 25 -sLo asn.csv.gz "https://ipinfo.io/data/free/asn.csv.gz?token=${{ secrets.IPINFO_ACCESS_TOKEN }}"
+          curl --connect-timeout 5 --retry 5 --retry-delay 5 --retry-max-time 25 -sLo country.csv.gz "https://ipinfo.io/data/free/country.csv.gz?token=${{ secrets.IPINFO_ACCESS_TOKEN }}"
+          curl --connect-timeout 5 --retry 5 --retry-delay 5 --retry-max-time 25 -sLo country_asn.csv.gz "https://ipinfo.io/data/free/country_asn.csv.gz?token=${{ secrets.IPINFO_ACCESS_TOKEN }}"
+          cp -v *.csv.gz download
+
+      - name: Download GeoDatabse json
+        run: |
+          curl --connect-timeout 5 --retry 5 --retry-delay 5 --retry-max-time 25 -sLo asn.json.gz "https://ipinfo.io/data/free/asn.json.gz?token=${{ secrets.IPINFO_ACCESS_TOKEN }}"
+          curl --connect-timeout 5 --retry 5 --retry-delay 5 --retry-max-time 25 -sLo country.json.gz "https://ipinfo.io/data/free/country.json.gz?token=${{ secrets.IPINFO_ACCESS_TOKEN }}"
+          curl --connect-timeout 5 --retry 5 --retry-delay 5 --retry-max-time 25 -sLo country_asn.json.gz "https://ipinfo.io/data/free/country_asn.json.gz?token=${{ secrets.IPINFO_ACCESS_TOKEN }}"
+          cp -v *.json.gz download
+
+      - name: Push to "release" branch
+        run: |
+          cd download
+          git init
+          git config user.name "Epsilon"
+          git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+          git checkout -b release
+          git add .
+          git commit -m "${{ env.TAG_NAME }}"
+          git remote add origin "https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}"
+          git push -f origin release
+
+      - name: Upload to Releases
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          body: ${{ env.TAG_NAME }}
+          files: |
+            download/*.mmdb
+            download/*.csv.gz
+            download/*.json.gz
+      
+      - name: Remove old Releases
+        uses: dev-drprasad/delete-older-releases@v0.3.2
+        with:
+          keep_latest: 3
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      # - name: Upload to Latest Tag
+      #   uses: softprops/action-gh-release@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ github.token }}
+      #   with:
+      #     tag_name: latest
+      #     body: The latest.
+      #     draft: false
+      #     prerelease: true
+      #     files: |
+      #       download/*.mmdb
+      #       download/*.zip
+
+      - name: Remove old Workflow runs records
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 3
+          keep_minimum_runs: 3
